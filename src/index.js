@@ -1,4 +1,5 @@
 var phaser = require("phaser");
+var brain = require("brain.js");
 //var ball;
 var cannon;
 var angle = -0.4;
@@ -8,7 +9,18 @@ var text;
 let ball;
 var balls = [];
 var timedEvent;
-var trainingData = []
+var trainingData = [];
+var hit;
+
+// provide optional config object (or undefined). Defaults shown.
+const configx = {
+  binaryThresh: 0.5, // ¯\_(ツ)_/¯
+  hiddenLayers: [3], // array of ints for the sizes of the hidden layers in the network
+  activation: "sigmoid" // supported activation types: ['sigmoid', 'relu', 'leaky-relu', 'tanh']
+};
+
+// create a simple feed forward neural network with backpropagation
+const net = new brain.NeuralNetwork(configx);
 
 var config = {
   type: phaser.AUTO,
@@ -38,7 +50,13 @@ function preload() {
 
 function create() {
   //this.add.image(400, 300, 'ball');
-  timedEvent = this.time.addEvent({ delay: 500, callback: fire, callbackScope: this, loop: true });
+
+  timedEvent = this.time.addEvent({
+    delay: 500,
+    callback: fire,
+    callbackScope: this,
+    loop: true
+  });
 
   text = this.add.text(10, 10, "Score: ", {
     font: "28px Arial",
@@ -55,25 +73,26 @@ function create() {
   // ball = new Ball({ scene: this, x: cannon.x + 130, y: cannon.y - 50 });
   //ball.disableBody(true, true);
 
-  this.input.on(
-    "pointerup",
+  this.input.keyboard.on(
+    "keydown-SPACE",
     function() {
-      //timer = 0;
-      ball = new Ball({ scene: this, x: cannon.x + 130, y: cannon.y - 50 });
-      balls.push(ball);
+      net.train([
+        {
+          input: [trainingData.sp],
+          output: [trainingData.ht]
+        }
+      ]);
+    },
+    this
+  );
+  this.input.keyboard.on(
+    "keydown-G",
+    function() {
+      var randomSpeed = Math.floor(Math.random() * 600) + 200;
 
-      for (var i = 0; i < balls.length; i++) {
-        this.physics.velocityFromRotation(angle, 600, ball.body.velocity);
-      }
-
-      // balls.push(ball);
-      // for (var i = 0; i < balls.length; i++) {
-      //   // ball.play('fly');
-      //   balls[i].enableBody(true, cannon.x + 130, cannon.y - 50, true, true);
-
-      //   this.physics.velocityFromRotation(angle, 600, ball.body.velocity);
-      //   //console.log(balls);0
-      // }
+      var output = net.run(randomSpeed);
+      console.log(randomSpeed);
+      console.log(output);
     },
     this
   );
@@ -86,8 +105,7 @@ function update() {
       text.text = "Score: " + score;
       score++;
       balls[i].destroy();
-      trainingData.push({x:balls[i].x, y:balls[i].y, sp:cannon.x})
-    
+      hit = true;
     });
   }
 }
@@ -111,7 +129,7 @@ class Ball extends phaser.GameObjects.Sprite {
 
 function fire() {
   // console.log("fire")
-  var randomSpeed = Math.floor(Math.random() * 600)+200;  
+  var randomSpeed = Math.floor(Math.random() * 600) + 200;
   ball = new Ball({ scene: this, x: cannon.x + 130, y: cannon.y - 50 });
   balls.push(ball);
 
@@ -119,10 +137,13 @@ function fire() {
     this.physics.velocityFromRotation(angle, randomSpeed, ball.body.velocity);
   }
 
-  if (balls.length === 50) {
+  if (balls.length === 20) {
     timedEvent.remove(true);
-    console.log(trainingData)
+    console.log(trainingData);
   }
 
-  console.log(randomSpeed)
+  //console.log(randomSpeed);
+  if (hit === true) {
+    trainingData.push({ sp: randomSpeed, ht: 1 });
+  } else trainingData.push({ sp: randomSpeed, ht: 0 });
 }
